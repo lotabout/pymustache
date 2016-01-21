@@ -24,3 +24,23 @@ def lookup(var_name, contexts=()):
             return context[var_name]
     return None
 
+#==============================================================================
+# Token
+# We'll parse the template into a tree of tokens, so a Token is actually a
+# node of the tree.
+# We'll save the all the information about the node here.
+
+class Token():
+    """The node of a parse tree"""
+    LITERAL   = 0
+    VARIABLE  = 1
+    SECTION   = 2
+    INVERTED  = 3
+    COMMENT   = 4
+    PARTIAL   = 5
+    DELIMITER = 6
+
+    def __init__(self, type=LITERAL, value=None, children=None):
+        self.type = type
+        self.value = value
+        self.children = children
