@@ -152,7 +152,7 @@ def compiled(template, delimiters):
     tokens.append(Token('str', Token.LITERAL, template[index:]))
     return Token('root', Token.ROOT, children=tokens)
 
-def render(template, contexts, partials, delimiters=None):
+def render(template, contexts, partials=[], delimiters=None):
     """TODO: Docstring for render.
 
     :template: TODO
@@ -337,37 +337,3 @@ class Token():
 
     def __str__(self):
         return self._get_str(0)
-
-
-text = """
-<h1>{{header}}</h1>
-{{#bug}}
-{{/bug}}
-
-{{#items}}
-  {{#first}}
-    <li><strong>{{name}}</strong></li>
-  {{/first}}
-  {{#link}}
-    <li><a href="{{url}}">{{name}}</a></li>
-  {{/link}}
-{{/items}}
-
-{{#empty}}
-  <p>The list is empty.</p>
-{{/empty}}
-"""
-
-x = compiled(text, DEFAULT_DELIMITERS)
-#print(x)
-context = [{
-  "header": "Colors",
-  "items": [
-      {"name": "red", "first": True, "url": "#Red"},
-      {"name": "green", "link": True, "url": "#Green"},
-      {"name": "blue", "link": True, "url": "#Blue"}
-  ],
-  "empty": False
-}]
-
-print(render(text, context, []))
