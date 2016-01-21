@@ -5,6 +5,7 @@ from html import escape as html_escape
 
 DEFAULT_DELIMITERS = ('{{', '}}')
 EMPTYSTRING = ""
+re_space = re.compile(r'[ \t\r\b\f]*(\n|$)')
 
 #==============================================================================
 # Context lookup.
@@ -80,11 +81,16 @@ def compiled(template, delimiters):
     m = re_tag.search(template, index)
 
     while m is not None:
+        token = None
+        last_literal = None
+        strip_space = False
+
         if m.start() > index:
-            tokens.append(Token('str', Token.LITERAL, template[index:m.start()]))
+            last_literal = Token('str', Token.LITERAL, template[index:m.start()])
+            tokens.append(last_literal)
+
         # parse token
         prefix, name, suffix = m.groups()
-        token = None
 
         if prefix == '=' and suffix == '=':
             # {{=| |=}} to change delimiters
@@ -92,6 +98,7 @@ def compiled(template, delimiters):
             if len(delimiters) != 2:
                 raise SyntaxError('Invalid new delimiter definition: ' + m.group())
             re_tag = delimiters_to_re(delimiters)
+            strip_space = True
 
         elif prefix == '{' and suffix == '}':
             # {{{ variable }}}
@@ -113,6 +120,7 @@ def compiled(template, delimiters):
         elif prefix == '!':
             # {{! comment }}
             token = Token(name, Token.COMMENT)
+            strip_space = True
 
         elif prefix == '>':
             # {{> partial}}
@@ -129,6 +137,7 @@ def compiled(template, delimiters):
             tokens = []
 
             sections.append((name, prefix, m.end()))
+            strip_space = True
 
         elif prefix == '/':
             tag_name, sec_type, text_end = sections.pop()
@@ -140,6 +149,7 @@ def compiled(template, delimiters):
 
             tokens[-1].text = template[text_end:m.start()]
             tokens[-1].children = children
+            strip_space = True
 
         else:
             raise SyntaxError('Unknown tag: ' + m.group())
@@ -148,6 +158,14 @@ def compiled(template, delimiters):
             tokens.append(token)
 
         index = m.end()
+        if strip_space:
+            matched = re_space.match(template, index)
+            prev_str = last_literal.value.rstrip(' \t\r\b\f') if last_literal else ''
+            if matched and (len(prev_str) <= 0 or prev_str[-1] =='\n'): 
+                index = matched.end()
+                if last_literal: last_literal.value = prev_str
+
+
         m = re_tag.search(template, index)
 
     tokens.append(Token('str', Token.LITERAL, template[index:]))
@@ -194,10 +212,11 @@ class Token():
 
     def _escape(self, text):
         """Escape text according to self.escape"""
+        ret = EMPTYSTRING if not text else str(text)
         if self.escape:
-            return EMPTYSTRING if text is None else html_escape(text)
+            return html_escape(ret)
         else:
-            return EMPTYSTRING if text is None else text
+            return ret
 
     def _render_children(self, contexts, partials):
         """Render the children tokens"""
@@ -226,12 +245,11 @@ class Token():
                     # not found
                     break;
 
-
         # lambda
         if callable(value):
             value = render(value(), contexts, partials)
 
-        return self._escape('' if not value else str(value))
+        return self._escape(value)
 
     def _render_section(self, contexts, partials):
         """render section"""
@@ -263,14 +281,14 @@ class Token():
             value = self._render_children(contexts, partials)
             contexts.pop()
 
-        return self._escape(str(value))
+        return self._escape(value)
 
     def _render_inverted(self, contexts, partials):
         """render inverted section"""
         val = lookup(self.value, contexts)
         if val:
             return EMPTYSTRING
-        self._render_children(contexts, partials)
+        return self._render_children(contexts, partials)
 
     def _render_comments(self, contexts, partials):
         """render comments, just skip it"""
@@ -281,7 +299,7 @@ class Token():
         try:
             partial = partials[self.value]
         except KeyError as e:
-            raise SyntaxError('partial not found: ' + self.value)
+            return self._escape(EMPTYSTRING)
 
         return render(partial, contexts, partials, self.delimiter)
 

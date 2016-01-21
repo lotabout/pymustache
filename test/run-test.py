@@ -12,7 +12,8 @@ mustache = imp.load_source('mustache', '../src/mustache.py')
     #'sections.json']
 
 test_files = ['interpolation.json',
-        'delimiters.json']
+        'delimiters.json',
+        'comments.json']
 
 for filename in test_files:
     with open(os.path.join('./spec/specs/', filename)) as fp:
@@ -22,9 +23,11 @@ for filename in test_files:
         context = test['data']
         template = test['template']
         expected = test['expected']
-        result = mustache.render(template, [context])
+        partials = test['partials'] if 'partials' in test else {}
+        result = mustache.render(template, [context], partials)
         if result != expected:
-            print('>>>>>>>>> Error >>>>>>>>>>>>')
+            print('>>>>>>> ERROR >>>>>>>>>>>>>>')
+            print('name:', test['name'])
             print('template:', template)
             print('expected:', expected)
             print('result  :', result)
