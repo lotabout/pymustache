@@ -95,7 +95,7 @@ def compiled(template, delimiters):
         elif prefix == '{' and suffix == '}':
             # {{{ variable }}}
             token = Token(name, Token.VARIABLE, name)
-            token.escape = True
+            token.escape = False
 
         elif prefix == '' and suffix == '':
             # {{ name }}
@@ -107,7 +107,7 @@ def compiled(template, delimiters):
         elif prefix == '&':
             # {{& escaped variable }}
             token = Token(name, Token.VARIABLE, name)
-            token.escape = True
+            token.escape = False
 
         elif prefix == '!':
             # {{! comment }}
@@ -188,7 +188,7 @@ class Token():
         self.value = value
         self.text = text
         self.children = children
-        self.escape = False
+        self.escape = True
         self.delimiter = None # used for section
 
     def _escape(self, text):
@@ -215,13 +215,22 @@ class Token():
             # refer to itself `{{.}}`
             value = str(contexts[0])
         else:
-            value = lookup(self.value, contexts)
+            names = self.value.split('.')
+            value = lookup(names[0], contexts)
+            # support {{a.b.c.d.e}} like lookup
+            for name in names[1:]:
+                try:
+                    value = value[name]
+                except:
+                    # not found
+                    break;
+
 
         # lambda
         if callable(value):
             value = render(value(), contexts, partials)
 
-        return self._escape(str(value))
+        return self._escape('' if not value else str(value))
 
     def _render_section(self, contexts, partials):
         """render section"""
