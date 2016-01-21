@@ -42,6 +42,7 @@ def delimiters_to_re(delimiters):
     """convert delimiters to corresponding regular expressions"""
 
     # caching
+    delimiters = tuple(delimiters)
     if delimiters in re_delimiters:
         re_tag = re_delimiters[delimiters]
     else:
@@ -85,7 +86,7 @@ def compiled(template, delimiters):
         prefix, name, suffix = m.groups()
         token = None
 
-        if prefix == '=' and postfix == '=':
+        if prefix == '=' and suffix == '=':
             # {{=| |=}} to change delimiters
             delimiters = re.split(r'\s+', name)
             if len(delimiters) != 2:
