@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import re
+from html import escape as html_escape
 
 DEFAULT_DELIMITERS = ('{{', '}}')
 EMPTYSTRING = ""
@@ -32,9 +33,6 @@ def lookup(var_name, contexts=()):
             continue
     return None
 
-def html_escape(text):
-    return text
-
 #==============================================================================
 # Compilation
 # To compile a template into a tree of tokens, using the given delimiters.
@@ -60,7 +58,7 @@ def delimiters_to_re(delimiters):
 
 class SyntaxError(Exception):
     pass
-        
+
 
 def compiled(template, delimiters):
     """Compile a template into token tree
