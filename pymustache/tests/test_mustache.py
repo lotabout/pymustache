@@ -16,13 +16,12 @@ class TestMustache(TestCase):
     def _run_test(self, filename):
         tests = self._prepare_data(filename)
         for test in tests:
-            with self.subTest(test = test):
-                context = test['data']
-                template = test['template']
-                expected = test['expected']
-                partials = test['partials'] if 'partials' in test else {}
-                result = mustache.render(template, context, partials)
-                self.assertEqual(result, expected, test['name'])
+            context = test['data']
+            template = test['template']
+            expected = test['expected']
+            partials = test['partials'] if 'partials' in test else {}
+            result = mustache.render(template, context, partials)
+            self.assertEqual(result, expected, test['name'])
 
     def test_comments(self):
         """Verify comments.json"""

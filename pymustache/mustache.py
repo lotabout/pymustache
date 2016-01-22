@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import re
-from html import escape as html_escape
+
+try:
+    from html import escape as html_escape
+except:
+    # python 2
+    import cgi
+    def html_escape(text):
+        return cgi.escape(text, quote=True)
 
 DEFAULT_DELIMITERS = ('{{', '}}')
 EMPTYSTRING = ""
