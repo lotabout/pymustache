@@ -196,7 +196,7 @@ def compiled(template, delimiters):
     tokens.append(Token('str', Token.LITERAL, template[index:]))
     return Token('root', Token.ROOT, children=tokens)
 
-def render(template, contexts, partials=[], delimiters=None):
+def render(template, contexts, partials={}, delimiters=None):
     """TODO: Docstring for render.
 
     :template: TODO
@@ -206,6 +206,12 @@ def render(template, contexts, partials=[], delimiters=None):
     :returns: A parsed string
 
     """
+    if not isinstance(contexts, (list, tuple)):
+        contexts = [contexts]
+
+    if not isinstance(partials, dict):
+        raise TypeError('partials should be dict, but got ' + type(partials))
+
     delimiters = DEFAULT_DELIMITERS if delimiters is None else delimiters
     parent_token = compiled(template, delimiters)
     return parent_token.render(contexts, partials)
