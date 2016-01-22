@@ -9,7 +9,6 @@ spaces_not_newline = ' \t\r\b\f'
 re_space = re.compile(r'[' + spaces_not_newline + r']*(\n|$)')
 re_insert_indent = re.compile(r'(^|\n)(?=.|\n)', re.DOTALL)
 
-
 #==============================================================================
 # Context lookup.
 # Mustache uses javascript's prototype like lookup for variables.
@@ -156,6 +155,7 @@ def compiled(template, delimiters):
         elif prefix == '#' or prefix == '^':
             # {{# section }} or # {{^ inverted }}
             token = Token(name, Token.SECTION if prefix == '#' else Token.INVERTED, name)
+            token.delimiter = delimiters
             tokens.append(token)
 
             # save the tokens onto stack
@@ -208,7 +208,6 @@ def render(template, contexts, partials=[], delimiters=None):
     """
     delimiters = DEFAULT_DELIMITERS if delimiters is None else delimiters
     parent_token = compiled(template, delimiters)
-    #print(parent_token)
     return parent_token.render(contexts, partials)
 
 #==============================================================================
@@ -284,7 +283,7 @@ class Token():
 
         # lambda
         if callable(value):
-            value = render(value(), contexts, partials)
+            value = render(str(value()), contexts, partials)
 
         return self._escape(value)
 
