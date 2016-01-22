@@ -5,7 +5,10 @@ from html import escape as html_escape
 
 DEFAULT_DELIMITERS = ('{{', '}}')
 EMPTYSTRING = ""
-re_space = re.compile(r'[ \t\r\b\f]*(\n|$)')
+spaces_not_newline = ' \t\r\b\f'
+re_space = re.compile(r'[' + spaces_not_newline + r']*(\n|$)')
+re_insert_indent = re.compile(r'(^|\n)(?=.|\n)', re.DOTALL)
+
 
 #==============================================================================
 # Context lookup.
@@ -61,6 +64,24 @@ def delimiters_to_re(delimiters):
 class SyntaxError(Exception):
     pass
 
+def is_standalone(text, start, end):
+    """check if the string text[start:end] is standalone by checking forwards
+    and backwards for blankspaces
+    :text: TODO
+    :(start, end): TODO
+    :returns: the start of next index after text[start:end]
+
+    """
+    left = False
+    start -= 1
+    while start >= 0 and text[start] in spaces_not_newline:
+        start -= 1
+
+    if start < 0 or text[start] == '\n':
+        left = True
+
+    right = re_space.match(text, end)
+    return (start+1, right.end()) if left and right else None
 
 def compiled(template, delimiters):
     """Compile a template into token tree
@@ -103,11 +124,11 @@ def compiled(template, delimiters):
         elif prefix == '{' and suffix == '}':
             # {{{ variable }}}
             token = Token(name, Token.VARIABLE, name)
-            token.escape = False
 
         elif prefix == '' and suffix == '':
             # {{ name }}
             token = Token(name, Token.VARIABLE, name)
+            token.escape = True
 
         elif suffix != '' and suffix != None:
             raise SyntaxError('Invalid token: ' + m.group())
@@ -115,7 +136,6 @@ def compiled(template, delimiters):
         elif prefix == '&':
             # {{& escaped variable }}
             token = Token(name, Token.VARIABLE, name)
-            token.escape = False
 
         elif prefix == '!':
             # {{! comment }}
@@ -127,6 +147,11 @@ def compiled(template, delimiters):
         elif prefix == '>':
             # {{> partial}}
             token = Token(name, Token.PARTIAL, name)
+            strip_space = True
+
+            pos = is_standalone(template, m.start(), m.end())
+            if pos:
+                token.indent = len(template[pos[0]:m.start()])
 
         elif prefix == '#' or prefix == '^':
             # {{# section }} or # {{^ inverted }}
@@ -161,12 +186,10 @@ def compiled(template, delimiters):
 
         index = m.end()
         if strip_space:
-            matched = re_space.match(template, index)
-            prev_str = last_literal.value.rstrip(' \t\r\b\f') if last_literal else ''
-            if matched and (len(prev_str) <= 0 or prev_str[-1] =='\n'): 
-                index = matched.end()
-                if last_literal: last_literal.value = prev_str
-
+            pos = is_standalone(template, m.start(), m.end())
+            if pos:
+                index = pos[1]
+                if last_literal: last_literal.value = last_literal.value.rstrip(spaces_not_newline)
 
         m = re_tag.search(template, index)
 
@@ -210,8 +233,9 @@ class Token():
         self.value = value
         self.text = text
         self.children = children
-        self.escape = True
+        self.escape = False
         self.delimiter = None # used for section
+        self.indent = 0 # used for partial
 
     def _escape(self, text):
         """Escape text according to self.escape"""
@@ -312,6 +336,8 @@ class Token():
             partial = partials[self.value]
         except KeyError as e:
             return self._escape(EMPTYSTRING)
+
+        partial = re_insert_indent.sub(r'\1' + ' '*self.indent, partial)
 
         return render(partial, contexts, partials, self.delimiter)
 
