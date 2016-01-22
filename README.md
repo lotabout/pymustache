@@ -9,7 +9,7 @@ you need a template tool for product,
 # Install
 
 ```
-pip install pystache
+pip install pymustache
 ```
 
 Both Python 2 and Python 3 will be OK.
