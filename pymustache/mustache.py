@@ -89,6 +89,12 @@ def is_standalone(text, start, end):
     right = re_space.match(text, end)
     return (start+1, right.end()) if left and right else None
 
+class Mustache():
+    """Mustache template object"""
+    def __init__(self, template):
+        self.template = template
+
+
 def compiled(template, delimiters=DEFAULT_DELIMITERS):
     """Compile a template into token tree
 
@@ -353,7 +359,7 @@ class Token():
 
         return render(partial, contexts, partials, self.delimiter)
 
-    def render(self, contexts, partials):
+    def render(self, contexts, partials={}):
         """Run the current token with contexts and partials
 
         :contexts: the context stack, (context1, context2, ...)
@@ -361,6 +367,9 @@ class Token():
         :returns: A string contains the rendered result
 
         """
+        if not isinstance(contexts, (list, tuple)):
+            contexts = [contexts]
+
         if self.type == self.LITERAL:
             return self._render_literal(contexts, partials)
         elif self.type == self.VARIABLE:
