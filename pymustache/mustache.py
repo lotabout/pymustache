@@ -16,9 +16,9 @@ re_insert_indent = re.compile(r'(^|\n)(?=.|\n)', re.DOTALL)
 # A context is just a dict, and we use a list of contexts to represent the
 # stack, the lookup order is in reversed order
 
-# lookup('x', ({'x': 10, 'y': 20}, {'y': 30, 'z':40}) => 10
-# lookup('y', ({'x': 10, 'y': 20}, {'y': 30, 'z':40}) => 20
-# lookup('z', ({'x': 10, 'y': 20}, {'y': 30, 'z':40}) => 40
+# lookup('x', ({'y': 30, 'z':40}, {'x': 10, 'y': 20}) => 10
+# lookup('y', ({'y': 30, 'z':40}, {'x': 10, 'y': 20}) => 20
+# lookup('z', ({'y': 30, 'z':40}, {'x': 10, 'y': 20}) => 40
 def lookup(var_name, contexts=()):
     """lookup the value of the var_name on the stack of contexts
 
@@ -82,7 +82,7 @@ def is_standalone(text, start, end):
     right = re_space.match(text, end)
     return (start+1, right.end()) if left and right else None
 
-def compiled(template, delimiters):
+def compiled(template, delimiters=DEFAULT_DELIMITERS):
     """Compile a template into token tree
 
     :template: TODO
