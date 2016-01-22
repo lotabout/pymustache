@@ -13,7 +13,8 @@ mustache = imp.load_source('mustache', '../src/mustache.py')
 
 test_files = ['interpolation.json',
         'delimiters.json',
-        'comments.json']
+        'comments.json',
+        'sections.json']
 
 for filename in test_files:
     with open(os.path.join('./spec/specs/', filename)) as fp:
@@ -29,7 +30,7 @@ for filename in test_files:
             print('>>>>>>> ERROR >>>>>>>>>>>>>>')
             print('name:', test['name'])
             print('template:', template)
-            print('expected:', expected)
-            print('result  :', result)
+            print('expected:', repr(expected))
+            print('result  :', repr(result))
 
 

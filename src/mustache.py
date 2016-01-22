@@ -120,7 +120,9 @@ def compiled(template, delimiters):
         elif prefix == '!':
             # {{! comment }}
             token = Token(name, Token.COMMENT)
-            strip_space = True
+            if len(sections) <= 0:
+                # considered as standalone only outside sections
+                strip_space = True
 
         elif prefix == '>':
             # {{> partial}}
@@ -183,6 +185,7 @@ def render(template, contexts, partials=[], delimiters=None):
     """
     delimiters = DEFAULT_DELIMITERS if delimiters is None else delimiters
     parent_token = compiled(template, delimiters)
+    #print(parent_token)
     return parent_token.render(contexts, partials)
 
 #==============================================================================
@@ -218,6 +221,28 @@ class Token():
         else:
             return ret
 
+    def _lookup(self, dot_name, contexts):
+        """lookup value for names like 'a.b.c'
+
+        :dot_name: TODO
+        :contexts: TODO
+        :returns: None if not found
+
+        """
+        if dot_name == '.':
+            value = contexts[-1]
+        else:
+            names = dot_name.split('.')
+            value = lookup(names[0], contexts)
+            # support {{a.b.c.d.e}} like lookup
+            for name in names[1:]:
+                try:
+                    value = value[name]
+                except:
+                    # not found
+                    break;
+        return value
+
     def _render_children(self, contexts, partials):
         """Render the children tokens"""
         ret = []
@@ -231,19 +256,7 @@ class Token():
 
     def _render_variable(self, contexts, partials):
         """render variable"""
-        if self.value == '.':
-            # refer to itself `{{.}}`
-            value = str(contexts[0])
-        else:
-            names = self.value.split('.')
-            value = lookup(names[0], contexts)
-            # support {{a.b.c.d.e}} like lookup
-            for name in names[1:]:
-                try:
-                    value = value[name]
-                except:
-                    # not found
-                    break;
+        value = self._lookup(self.value, contexts)
 
         # lambda
         if callable(value):
@@ -253,7 +266,7 @@ class Token():
 
     def _render_section(self, contexts, partials):
         """render section"""
-        val = lookup(self.value, contexts)
+        val = self._lookup(self.value, contexts)
         if not val:
             # false value
             return EMPTYSTRING
@@ -270,8 +283,7 @@ class Token():
                 ret.append(self._render_children(contexts, partials))
                 contexts.pop()
             return self._escape(''.join(ret))
-
-        if callable(val):
+        elif callable(val):
             # lambdas
             new_template = val(self.text)
             value = render(new_template, contexts, partials, self.delimiter)
@@ -285,7 +297,7 @@ class Token():
 
     def _render_inverted(self, contexts, partials):
         """render inverted section"""
-        val = lookup(self.value, contexts)
+        val = self._lookup(self.value, contexts)
         if val:
             return EMPTYSTRING
         return self._render_children(contexts, partials)
