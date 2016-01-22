@@ -7,12 +7,21 @@ you need a template tool for product,
 [pystache](https://github.com/defunkt/pystache) might be a good choise.
 
 # Install
+pymustache supports both Python 2 and Python 3.
 
 ```
 pip install pymustache
 ```
 
-Both Python 2 and Python 3 will be OK.
+Quick Example:
+
+```
+>>> import pymustache
+
+>>> pymustache.render('Hellow {{name}}!', {'name': 'World'})
+'Hellow World!'
+```
+
 
 # Demo Usage
 
