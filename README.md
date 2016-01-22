@@ -1,13 +1,12 @@
+pymustache is an template engine for Mustache
+[v1.1.3+λ](https://github.com/mustache/spec/releases/tag/v1.1.3).
 [Mustache](https://mustache.github.io/) is a logic-less template. It is simple
-and elegant. I am not trying to reinventing the wheel, I'm just re-creating
-it in python.
+and elegant.
 
-Note that I build this as a test for myself only, no optimization is made. If
-you need a template tool for product,
-[pystache](https://github.com/defunkt/pystache) might be a good choise.
+pymustache is intended to be simple and fast, it supports both Python 2 and
+Python 3.
 
 # Install
-pymustache supports both Python 2 and Python 3.
 
 ```
 pip install pymustache
@@ -21,7 +20,6 @@ Quick Example:
 >>> pymustache.render('Hellow {{name}}!', {'name': 'World'})
 'Hellow World!'
 ```
-
 
 # Demo Usage
 
@@ -88,3 +86,7 @@ In [7]: print compiled_tempalte.render(context)
 [Mustache](https://mustache.github.io/) is a logic-less templating system.
 
 You can check its syntax here: [mustache(5)](https://mustache.github.io/mustache.5.html)
+
+# Alternatives
+
+- [pystache](https://github.com/defunkt/pystache) a Python implementation of Mustache.
