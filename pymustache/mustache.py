@@ -89,12 +89,6 @@ def is_standalone(text, start, end):
     right = re_space.match(text, end)
     return (start+1, right.end()) if left and right else None
 
-class Mustache():
-    """Mustache template object"""
-    def __init__(self, template):
-        self.template = template
-
-
 def compiled(template, delimiters=DEFAULT_DELIMITERS):
     """Compile a template into token tree
 
