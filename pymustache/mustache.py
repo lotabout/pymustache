@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import re
+import copy
 
 try:
     from html import escape as html_escape
@@ -15,6 +16,9 @@ EMPTYSTRING = ""
 spaces_not_newline = ' \t\r\b\f'
 re_space = re.compile(r'[' + spaces_not_newline + r']*(\n|$)')
 re_insert_indent = re.compile(r'(^|\n)(?=.|\n)', re.DOTALL)
+
+# default filters
+filters = {}
 
 #==============================================================================
 # Context lookup.
@@ -121,15 +125,18 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
     sections = []
     tokens_stack = []
 
-    m = re_tag.search(template, index)
+    # root token
+    root = Root('root')
+    root.filters = copy.copy(filters)
 
+    m = re_tag.search(template, index)
     while m is not None:
         token = None
         last_literal = None
         strip_space = False
 
         if m.start() > index:
-            last_literal = Literal('str', template[index:m.start()])
+            last_literal = Literal('str', template[index:m.start()], root=root)
             tokens.append(last_literal)
 
         # parse token
@@ -145,11 +152,11 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
 
         elif prefix == '{' and suffix == '}':
             # {{{ variable }}}
-            token = Variable(name, name)
+            token = Variable(name, name, root=root)
 
         elif prefix == '' and suffix == '':
             # {{ name }}
-            token = Variable(name, name)
+            token = Variable(name, name, root=root)
             token.escape = True
 
         elif suffix != '' and suffix != None:
@@ -157,18 +164,18 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
 
         elif prefix == '&':
             # {{& escaped variable }}
-            token = Variable(name, name)
+            token = Variable(name, name, root=root)
 
         elif prefix == '!':
             # {{! comment }}
-            token = Comment(name)
+            token = Comment(name, root=root)
             if len(sections) <= 0:
                 # considered as standalone only outside sections
                 strip_space = True
 
         elif prefix == '>':
             # {{> partial}}
-            token = Partial(name, name)
+            token = Partial(name, name, root=root)
             strip_space = True
 
             pos = is_standalone(template, m.start(), m.end())
@@ -177,7 +184,10 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
 
         elif prefix == '#' or prefix == '^':
             # {{# section }} or # {{^ inverted }}
-            token = Section(name, name) if prefix == '#' else Inverted(name, name)
+
+            # strip filter
+            sec_name = name.split('|')[0].strip()
+            token = Section(sec_name, name, root=root) if prefix == '#' else Inverted(name, name, root=root)
             token.delimiter = delimiters
             tokens.append(token)
 
@@ -186,13 +196,13 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
             tokens_stack.append(tokens)
             tokens = []
 
-            sections.append((name, prefix, m.end()))
+            sections.append((sec_name, prefix, m.end()))
             strip_space = True
 
         elif prefix == '/':
             tag_name, sec_type, text_end = sections.pop()
             if tag_name != name:
-                raise SyntaxError("unclosed tag: '" + name + "' Got:" + m.group())
+                raise SyntaxError("unclosed tag: '" + tag_name + "' Got:" + m.group())
 
             children = tokens
             tokens = tokens_stack.pop()
@@ -217,7 +227,8 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
         m = re_tag.search(template, index)
 
     tokens.append(Literal('str', template[index:]))
-    return Root('root', children=tokens)
+    root.children = tokens
+    return root
 
 def render(template, context, partials={}, delimiters=None):
     contexts = [{'.': context}]
@@ -240,7 +251,7 @@ def inner_render(template, contexts, partials={}, delimiters=None):
 
 class Token():
     """The node of a parse tree"""
-    def __init__(self, name, value=None, text='', children=None):
+    def __init__(self, name, value=None, text='', children=None, root=None):
         self.name = name
         self.value = value
         self.text = text
@@ -248,6 +259,8 @@ class Token():
         self.escape = False
         self.delimiter = None # used for section
         self.indent = 0 # used for partial
+        self.root = root
+        self.filters = {}
 
     def _escape(self, text):
         """Escape text according to self.escape"""
@@ -258,13 +271,12 @@ class Token():
             return ret
 
     def _lookup(self, dot_name, contexts):
-        """lookup value for names like 'a.b.c'
+        """lookup value for names like 'a.b.c' and handle filters as well"""
 
-        :dot_name: TODO
-        :contexts: TODO
-        :returns: None if not found
+        filters = [x for x in map(lambda x: x.strip(), dot_name.split('|'))]
+        dot_name = filters[0]
+        filters = filters[1:]
 
-        """
         if not dot_name.startswith('.'):
             dot_name = './' + dot_name
 
@@ -284,16 +296,18 @@ class Token():
                 # ../a.b.c/.. in the middle
                 level += len(path.strip('.').split('.'))
 
-        if refer_context:
+        names = last_path.split('.')
+
+        if refer_context or names[0] == '':
             try:
                 value = contexts[level-1]['.']
             except:
                 value = None
         else:
             # support {{a.b.c.d.e}} like lookup
-            names = last_path.split('.')
             value = lookup(names[0], contexts, level)
 
+        if not refer_context:
             for name in names[1:]:
                 try:
                     # a.num (a.1, a.2) to access list
@@ -304,6 +318,14 @@ class Token():
                     # not found
                     value = None
                     break;
+
+        # apply filters
+        for f in filters:
+            try:
+                func = self.root.filters[f]
+                value = func(value)
+            except:
+                continue
 
         return value
 
@@ -379,17 +401,23 @@ class Section(Token):
             # false value
             return EMPTYSTRING
 
-        if isinstance(val, (list, tuple)):
-            if len(val) <= 0:
+        # normally json has types: number/string/list/map
+        # but python has more, so we decide that map and string should not iterate
+        # by default, other do.
+        if hasattr(val, "__iter__") and not isinstance(val, (str, dict)):
+            # non-empty lists
+            print('here/', val)
+            ret = []
+
+            for item in val:
+                contexts.append({'.': item})
+                ret.append(self._render_children(contexts, partials))
+                contexts.pop()
+
+            if len(ret) <= 0:
                 # empty lists
                 return EMPTYSTRING
 
-            # non-empty lists
-            ret = []
-            for index, item in enumerate(val):
-                contexts.append({'.': item, '@': {'@index': index}})
-                ret.append(self._render_children(contexts, partials))
-                contexts.pop()
             return self._escape(''.join(ret))
         elif callable(val):
             # lambdas
@@ -442,3 +470,11 @@ class Partial(Token):
         partial = re_insert_indent.sub(r'\1' + ' '*self.indent, partial)
 
         return inner_render(partial, contexts, partials, self.delimiter)
+
+
+#==============================================================================
+# Default Filters
+filters['items'] = lambda dict: dict.items()
+filters['enum'] = lambda list: enumerate(list)
+filters['lower'] = lambda string: string.lower()
+filters['upper'] = lambda string: string.upper()
