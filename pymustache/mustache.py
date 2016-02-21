@@ -42,10 +42,8 @@ def lookup(var_name, contexts=(), start=0):
     start = len(contexts) if start >=0 else start
     for context in reversed(contexts[:start]):
         try:
-            if '@' in context and var_name in context['@']:
-                return context['@'][var_name]
-            elif var_name in context['.']:
-                return context['.'][var_name]
+            if var_name in context:
+                return context[var_name]
         except TypeError as te:
             # we may put variable on the context, skip it
             continue
@@ -231,7 +229,7 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
     return root
 
 def render(template, context, partials={}, delimiters=None):
-    contexts = [{'.': context}]
+    contexts = [context]
 
     if not isinstance(partials, dict):
         raise TypeError('partials should be dict, but got ' + type(partials))
@@ -300,7 +298,7 @@ class Token():
 
         if refer_context or names[0] == '':
             try:
-                value = contexts[level-1]['.']
+                value = contexts[level-1]
             except:
                 value = None
         else:
@@ -406,11 +404,10 @@ class Section(Token):
         # by default, other do.
         if hasattr(val, "__iter__") and not isinstance(val, (str, dict)):
             # non-empty lists
-            print('here/', val)
             ret = []
 
             for item in val:
-                contexts.append({'.': item})
+                contexts.append(item)
                 ret.append(self._render_children(contexts, partials))
                 contexts.pop()
 
@@ -425,7 +422,7 @@ class Section(Token):
             value = inner_render(new_template, contexts, partials, self.delimiter)
         else:
             # context
-            contexts.append({'.': val})
+            contexts.append(val)
             value = self._render_children(contexts, partials)
             contexts.pop()
 
