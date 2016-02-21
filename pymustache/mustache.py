@@ -239,7 +239,7 @@ def render(template, context, partials={}, delimiters=None):
 def inner_render(template, contexts, partials={}, delimiters=None):
     delimiters = DEFAULT_DELIMITERS if delimiters is None else delimiters
     parent_token = compiled(template, delimiters)
-    return parent_token.render(contexts, partials)
+    return parent_token._render(contexts, partials)
 
 #==============================================================================
 # Token
@@ -271,10 +271,12 @@ class Token():
     def _lookup(self, dot_name, contexts):
         """lookup value for names like 'a.b.c' and handle filters as well"""
 
+        # process filters
         filters = [x for x in map(lambda x: x.strip(), dot_name.split('|'))]
         dot_name = filters[0]
         filters = filters[1:]
 
+        # should support paths like '../../a.b.c/../d', etc.
         if not dot_name.startswith('.'):
             dot_name = './' + dot_name
 
@@ -296,6 +298,7 @@ class Token():
 
         names = last_path.split('.')
 
+        # fetch the correct context
         if refer_context or names[0] == '':
             try:
                 value = contexts[level-1]
@@ -305,6 +308,7 @@ class Token():
             # support {{a.b.c.d.e}} like lookup
             value = lookup(names[0], contexts, level)
 
+        # lookup for variables
         if not refer_context:
             for name in names[1:]:
                 try:
@@ -331,7 +335,7 @@ class Token():
         """Render the children tokens"""
         ret = []
         for child in self.children:
-            ret.append(child.render(contexts, partials))
+            ret.append(child._render(contexts, partials))
         return EMPTYSTRING.join(ret)
 
     def _get_str(self, indent):
@@ -355,7 +359,8 @@ class Token():
         return self._get_str(0)
 
     def render(self, contexts, partials={}):
-        # call child's render function
+        # interface for compiled object, corresponds to render()
+        contexts = [contexts]
         return self._render(contexts, partials)
 
 class Root(Token):
