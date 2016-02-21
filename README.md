@@ -17,51 +17,50 @@ Quick Example:
 ```
 >>> import pymustache
 
->>> pymustache.render('Hellow {{name}}!', {'name': 'World'})
+>>> pymustache.render('Hello {{name}}!', {'name': 'World'})
 'Hellow World!'
 ```
 
 # Demo Usage
 
-Taken from https://mustache.github.io/#demo: They are typed in [IPython](http://ipython.org/)
+Taken from https://mustache.github.io/#demo:
 
 ```
-In [1]: import json, pymustache
+>>> import json, pymustache
+>>> template_text = """
+<h1>{{header}}</h1>
+{{#bug}}
+{{/bug}}
 
-In [2]: template_text = """
-   ...: <h1>{{header}}</h1>
-   ...: {{#bug}}
-   ...: {{/bug}}
-   ...:
-   ...: {{#items}}
-   ...:   {{#first}}
-   ...:     <li><strong>{{name}}</strong></li>
-   ...:   {{/first}}
-   ...:   {{#link}}
-   ...:     <li><a href="{{url}}">{{name}}</a></li>
-   ...:   {{/link}}
-   ...: {{/items}}
-   ...:
-   ...: {{#empty}}
-   ...:   <p>The list is empty.</p>
-   ...: {{/empty}}
-   ...: """
+{{#items}}
+  {{#first}}
+    <li><strong>{{name}}</strong></li>
+  {{/first}}
+  {{#link}}
+    <li><a href="{{url}}">{{name}}</a></li>
+  {{/link}}
+{{/items}}
 
-In [3]: context_text = """
-   ...: {
-   ...:   "header": "Colors",
-   ...:   "items": [
-   ...:       {"name": "red", "first": true, "url": "#Red"},
-   ...:       {"name": "green", "link": true, "url": "#Green"},
-   ...:       {"name": "blue", "link": true, "url": "#Blue"}
-   ...:   ],
-   ...:   "empty": false
-   ...: }
-   ...: """
+{{#empty}}
+  <p>The list is empty.</p>
+{{/empty}}
+"""
 
-In [4]: context = json.loads(context_text)
+>>> context_text = """
+{
+  "header": "Colors",
+  "items": [
+      {"name": "red", "first": true, "url": "#Red"},
+      {"name": "green", "link": true, "url": "#Green"},
+      {"name": "blue", "link": true, "url": "#Blue"}
+  ],
+  "empty": false
+}
+"""
 
-In [5]: print pymustache.render(template_text, context)
+>>> context = json.loads(context_text)
+
+>>> print pymustache.render(template_text, context)
 
 <h1>Colors</h1>
 
@@ -69,9 +68,9 @@ In [5]: print pymustache.render(template_text, context)
     <li><a href="#Green">green</a></li>
     <li><a href="#Blue">blue</a></li>
 
-In [6]: compiled_tempalte = pymustache.compiled(template_text)
+>>> compiled_tempalte = pymustache.compiled(template_text)
 
-In [7]: print compiled_tempalte.render(context)
+>>> print compiled_tempalte.render(context)
 
 <h1>Colors</h1>
 
@@ -80,6 +79,112 @@ In [7]: print compiled_tempalte.render(context)
     <li><a href="#Blue">blue</a></li>
 
 ```
+
+# Extension
+
+Native mustache are limited in some ways, for example, it is hard to retrieve
+list index while iterate over one. Thus pymustach add some extention syntax,
+which is simple and still be compatible with mustache.
+
+## Path
+
+Mustache alreadly support paths like `{{a.b.c}}` for quick reference to sub
+contexts. However it had no support for accessing parent contexts, so the
+following example will not work(taken form [Mustache 2.0 and the Future of
+Mustache.js](http://writing.jan.io/mustache-2.0.html)).
+
+```
+view = {
+  'foo': {
+    'bar': {
+      'baz': 1
+    },
+    'qux': 2
+  }
+};
+
+{{#foo}}
+  {{#bar}}
+    {{baz}}
+    {{qux}} # uh-oh!
+  {{/bar}}
+  {{qux}} # this would work, but isn’t what we want
+{{/foo}}
+```
+
+So we add [handlebar.js](http://handlebarsjs.com/) like path navigation, so
+that we can use the following template to achieve it.
+
+```
+{{#foo}}
+  {{#bar}}
+  {{baz}}
+  {{../qux}} # ah-ha!
+  {{/bar}}
+{{/foo}}
+```
+
+## Accessing List Element by Index
+
+As we said, we can access items by dot notion like `{{x.y}}`. In javascript,
+we can use string index to access list, for example:
+
+```js
+var x = [0,1,2,3];
+console.log(x['1']); // => 1
+```
+
+In python however, we cannot do that. Mustache's spec do not say anything
+about this behaviour, for convenience we add similar feature.
+
+```
+>>> pymustache.render('Hello {{name.1}}!', {'name': [0,1,2,3]})
+Hello 1
+```
+
+Note that such function will not work on map, because map keys in python can
+be either number or string.
+
+```
+>>> mustache.render('Hello {{name.1}}!', {'name': {1:1, '1': 'string 1'}})
+'Hello string 1!'
+```
+
+## Filters
+
+pymustache support filters, filters are separated with `|` character:
+
+```
+>>> mustache.render('Hello {{name | upper}}!', {'name': 'World'})
+'Hello WORLD!'
+```
+
+So now you can get the index of list by:
+
+```
+>>> mustache.render('{{#list | enum}} {{.0}}: {{.1}},{{/list}}', {'list': [1,2,3] )
+' 0: 1, 1: 2, 2: 3,'
+```
+
+or iterate over map:
+
+```
+>>> mustache.render('{{#list | items}} {{.0}}: {{.1}},{{/list}}', {'list': {'a': 10, 'b': 20}})
+' a: 10, b: 20,'
+```
+
+You can add your own filter:
+
+```
+>>> mustache.filters['strip'] = lambda string: string.strip()
+>>> mustache.render('Hello {{name}}!', {'name': '        World  '})
+'Hello         World  !'
+
+>>> mustache.render('Hello {{name | strip}}!', {'name': '        World  '})
+'Hello World!'
+```
+
+So, enjoy!
 
 # About Musatche
 
