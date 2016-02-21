@@ -26,7 +26,8 @@ re_insert_indent = re.compile(r'(^|\n)(?=.|\n)', re.DOTALL)
 # lookup('x', ({'y': 30, 'z':40}, {'x': 10, 'y': 20}) => 10
 # lookup('y', ({'y': 30, 'z':40}, {'x': 10, 'y': 20}) => 20
 # lookup('z', ({'y': 30, 'z':40}, {'x': 10, 'y': 20}) => 40
-def lookup(var_name, contexts=()):
+# context now contains special variables: {'.': normal_context, '@': special_vars}
+def lookup(var_name, contexts=(), start=0):
     """lookup the value of the var_name on the stack of contexts
 
     :var_name: TODO
@@ -34,14 +35,23 @@ def lookup(var_name, contexts=()):
     :returns: None if not found
 
     """
-    for context in reversed(contexts):
+    start = len(contexts) if start >=0 else start
+    for context in reversed(contexts[:start]):
         try:
-            if var_name in context:
-                return context[var_name]
+            if '@' in context and var_name in context['@']:
+                return context['@'][var_name]
+            elif var_name in context['.']:
+                return context['.'][var_name]
         except TypeError as te:
             # we may put variable on the context, skip it
             continue
     return None
+
+def get_parent(contexts):
+    try:
+        return contexts[-1]
+    except:
+        return None
 
 #==============================================================================
 # Compilation
@@ -203,22 +213,15 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
     tokens.append(Literal('str', template[index:]))
     return Root('root', children=tokens)
 
-def render(template, contexts, partials={}, delimiters=None):
-    """TODO: Docstring for render.
-
-    :template: TODO
-    :contexts: TODO
-    :partials: TODO
-    :delimiters: TODO
-    :returns: A parsed string
-
-    """
-    if not isinstance(contexts, (list, tuple)):
-        contexts = [contexts]
+def render(template, context, partials={}, delimiters=None):
+    contexts = [{'.': context}]
 
     if not isinstance(partials, dict):
         raise TypeError('partials should be dict, but got ' + type(partials))
 
+    return inner_render(template, contexts, partials, delimiters)
+
+def inner_render(template, contexts, partials={}, delimiters=None):
     delimiters = DEFAULT_DELIMITERS if delimiters is None else delimiters
     parent_token = compiled(template, delimiters)
     return parent_token.render(contexts, partials)
@@ -256,18 +259,43 @@ class Token():
         :returns: None if not found
 
         """
-        if dot_name == '.':
-            value = contexts[-1]
+        if not dot_name.startswith('.'):
+            dot_name = './' + dot_name
+
+        paths = dot_name.split('/')
+        last_path = paths[-1]
+
+        # path like '../..' or ./../. etc.
+        refer_context = last_path == '' or last_path == '.' or last_path == '..'
+        paths = paths if refer_context else paths[:-1]
+
+        # count path level
+        level = 0
+        for path in paths:
+            if path == '..':
+                level -= 1
+            elif path != '.':
+                # ../a.b.c/.. in the middle
+                level += len(path.strip('.').split('.'))
+
+        if refer_context:
+            try:
+                value = contexts[level-1]['.']
+            except:
+                value = None
         else:
-            names = dot_name.split('.')
-            value = lookup(names[0], contexts)
             # support {{a.b.c.d.e}} like lookup
+            names = last_path.split('.')
+            value = lookup(names[0], contexts, level)
+
             for name in names[1:]:
                 try:
                     value = value[name]
                 except:
                     # not found
+                    value = None
                     break;
+
         return value
 
     def _render_children(self, contexts, partials):
@@ -314,7 +342,7 @@ class Literal(Token):
         self.type_string = 'L'
     def _render(self, contexts, partials):
         """render simple literals"""
-        return self.value
+        return self._escape(self.value)
 
 class Variable(Token):
     def __init__(self, *arg, **kw):
@@ -326,7 +354,7 @@ class Variable(Token):
 
         # lambda
         if callable(value):
-            value = render(str(value()), contexts, partials)
+            value = inner_render(str(value()), contexts, partials)
 
         return self._escape(value)
 
@@ -349,18 +377,18 @@ class Section(Token):
 
             # non-empty lists
             ret = []
-            for item in val:
-                contexts.append(item)
+            for index, item in enumerate(val):
+                contexts.append({'.': item, '@': {'@index': index}})
                 ret.append(self._render_children(contexts, partials))
                 contexts.pop()
             return self._escape(''.join(ret))
         elif callable(val):
             # lambdas
             new_template = val(self.text)
-            value = render(new_template, contexts, partials, self.delimiter)
+            value = inner_render(new_template, contexts, partials, self.delimiter)
         else:
             # context
-            contexts.append(val)
+            contexts.append({'.': val})
             value = self._render_children(contexts, partials)
             contexts.pop()
 
@@ -404,4 +432,4 @@ class Partial(Token):
 
         partial = re_insert_indent.sub(r'\1' + ' '*self.indent, partial)
 
-        return render(partial, contexts, partials, self.delimiter)
+        return inner_render(partial, contexts, partials, self.delimiter)
