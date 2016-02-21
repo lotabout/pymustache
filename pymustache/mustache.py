@@ -113,7 +113,7 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
         strip_space = False
 
         if m.start() > index:
-            last_literal = Token('str', Token.LITERAL, template[index:m.start()])
+            last_literal = Literal('str', template[index:m.start()])
             tokens.append(last_literal)
 
         # parse token
@@ -129,11 +129,11 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
 
         elif prefix == '{' and suffix == '}':
             # {{{ variable }}}
-            token = Token(name, Token.VARIABLE, name)
+            token = Variable(name, name)
 
         elif prefix == '' and suffix == '':
             # {{ name }}
-            token = Token(name, Token.VARIABLE, name)
+            token = Variable(name, name)
             token.escape = True
 
         elif suffix != '' and suffix != None:
@@ -141,18 +141,18 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
 
         elif prefix == '&':
             # {{& escaped variable }}
-            token = Token(name, Token.VARIABLE, name)
+            token = Variable(name, name)
 
         elif prefix == '!':
             # {{! comment }}
-            token = Token(name, Token.COMMENT)
+            token = Comment(name)
             if len(sections) <= 0:
                 # considered as standalone only outside sections
                 strip_space = True
 
         elif prefix == '>':
             # {{> partial}}
-            token = Token(name, Token.PARTIAL, name)
+            token = Partial(name, name)
             strip_space = True
 
             pos = is_standalone(template, m.start(), m.end())
@@ -161,7 +161,7 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
 
         elif prefix == '#' or prefix == '^':
             # {{# section }} or # {{^ inverted }}
-            token = Token(name, Token.SECTION if prefix == '#' else Token.INVERTED, name)
+            token = Section(name, name) if prefix == '#' else Inverted(name, name)
             token.delimiter = delimiters
             tokens.append(token)
 
@@ -200,8 +200,8 @@ def compiled(template, delimiters=DEFAULT_DELIMITERS):
 
         m = re_tag.search(template, index)
 
-    tokens.append(Token('str', Token.LITERAL, template[index:]))
-    return Token('root', Token.ROOT, children=tokens)
+    tokens.append(Literal('str', template[index:]))
+    return Root('root', children=tokens)
 
 def render(template, contexts, partials={}, delimiters=None):
     """TODO: Docstring for render.
@@ -231,17 +231,8 @@ def render(template, contexts, partials={}, delimiters=None):
 
 class Token():
     """The node of a parse tree"""
-    LITERAL   = 0
-    VARIABLE  = 1
-    SECTION   = 2
-    INVERTED  = 3
-    COMMENT   = 4
-    PARTIAL   = 5
-    ROOT      = 6
-
-    def __init__(self, name, type=LITERAL, value=None, text='', children=None):
+    def __init__(self, name, value=None, text='', children=None):
         self.name = name
-        self.type = type
         self.value = value
         self.text = text
         self.children = children
@@ -286,11 +277,50 @@ class Token():
             ret.append(child.render(contexts, partials))
         return EMPTYSTRING.join(ret)
 
-    def _render_literal(self, contexts, partials):
+    def _get_str(self, indent):
+        ret = []
+        ret.append(' '*indent + '[(')
+        ret.append(self.type_string)
+        ret.append(',')
+        ret.append(self.name)
+        if self.value:
+            ret.append(',')
+            ret.append(repr(self.value))
+        ret.append(')')
+        if self.children:
+            for c in self.children:
+                ret.append('\n')
+                ret.append(c._get_str(indent+4))
+        ret.append(']')
+        return ''.join(ret)
+
+    def __str__(self):
+        return self._get_str(0)
+
+    def render(self, contexts, partials={}):
+        # call child's render function
+        return self._render(contexts, partials)
+
+class Root(Token):
+    def __init__(self, *arg, **kw):
+        Token.__init__(self, *arg, **kw)
+        self.type_string = 'R'
+    def _render(self, contexts, partials):
+        return self._render_children(contexts, partials)
+
+class Literal(Token):
+    def __init__(self, *arg, **kw):
+        Token.__init__(self, *arg, **kw)
+        self.type_string = 'L'
+    def _render(self, contexts, partials):
         """render simple literals"""
         return self.value
 
-    def _render_variable(self, contexts, partials):
+class Variable(Token):
+    def __init__(self, *arg, **kw):
+        Token.__init__(self, *arg, **kw)
+        self.type_string = 'V'
+    def _render(self, contexts, partials):
         """render variable"""
         value = self._lookup(self.value, contexts)
 
@@ -300,7 +330,12 @@ class Token():
 
         return self._escape(value)
 
-    def _render_section(self, contexts, partials):
+class Section(Token):
+    def __init__(self, *arg, **kw):
+        Token.__init__(self, *arg, **kw)
+        self.type_string = 'S'
+
+    def _render(self, contexts, partials):
         """render section"""
         val = self._lookup(self.value, contexts)
         if not val:
@@ -331,18 +366,36 @@ class Token():
 
         return self._escape(value)
 
-    def _render_inverted(self, contexts, partials):
+
+class Inverted(Token):
+    def __init__(self, *arg, **kw):
+        Token.__init__(self, *arg, **kw)
+        self.type_string = 'I'
+
+    def _render(self, contexts, partials):
         """render inverted section"""
         val = self._lookup(self.value, contexts)
         if val:
             return EMPTYSTRING
         return self._render_children(contexts, partials)
 
-    def _render_comments(self, contexts, partials):
+
+class Comment(Token):
+    def __init__(self, *arg, **kw):
+        Token.__init__(self, *arg, **kw)
+        self.type_string = 'C'
+
+    def _render(self, contexts, partials):
         """render comments, just skip it"""
         return EMPTYSTRING
 
-    def _render_partials(self, contexts, partials):
+
+class Partial(Token):
+    def __init__(self, *arg, **kw):
+        Token.__init__(self, *arg, **kw)
+        self.type_string = 'P'
+
+    def _render(self, contexts, partials):
         """render partials"""
         try:
             partial = partials[self.value]
@@ -352,69 +405,3 @@ class Token():
         partial = re_insert_indent.sub(r'\1' + ' '*self.indent, partial)
 
         return render(partial, contexts, partials, self.delimiter)
-
-    def render(self, contexts, partials={}):
-        """Run the current token with contexts and partials
-
-        :contexts: the context stack, (context1, context2, ...)
-        :partials: a dict of partials {'name': token, ...}
-        :returns: A string contains the rendered result
-
-        """
-        if not isinstance(contexts, (list, tuple)):
-            contexts = [contexts]
-
-        if self.type == self.LITERAL:
-            return self._render_literal(contexts, partials)
-        elif self.type == self.VARIABLE:
-            return self._render_variable(contexts, partials)
-        elif self.type == self.SECTION:
-            return self._render_section(contexts, partials)
-        elif self.type == self.INVERTED:
-            return self._render_inverted(contexts, partials)
-        elif self.type == self.COMMENT:
-            return self._render_comments(contexts, partials)
-        elif self.type == self.PARTIAL:
-            return self._render_partials(contexts, partials)
-        elif self.type == self.ROOT:
-            return self._render_children(contexts, partials)
-        else:
-            raise TypeError('Invalid Token Type')
-
-    def _type_string(self):
-        if self.type == self.LITERAL:
-            return 'L'
-        elif self.type == self.VARIABLE:
-            return 'V'
-        elif self.type == self.COMMENT:
-            return 'C'
-        elif self.type == self.SECTION:
-            return 'S'
-        elif self.type == self.INVERTED:
-            return 'I'
-        elif self.type == self.PARTIAL:
-            return 'P'
-        elif self.type == self.ROOT:
-            return 'R'
-        else:
-            return 'Unknown'
-
-    def _get_str(self, indent):
-        ret = []
-        ret.append(' '*indent + '[(')
-        ret.append(self._type_string())
-        ret.append(',')
-        ret.append(self.name)
-        if self.value:
-            ret.append(',')
-            ret.append(repr(self.value))
-        ret.append(')')
-        if self.children:
-            for c in self.children:
-                ret.append('\n')
-                ret.append(c._get_str(indent+4))
-        ret.append(']')
-        return ''.join(ret)
-
-    def __str__(self):
-        return self._get_str(0)
