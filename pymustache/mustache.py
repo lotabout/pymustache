@@ -53,6 +53,12 @@ def get_parent(contexts):
     except:
         return None
 
+def parse_int(string):
+    try:
+        return int(string)
+    except:
+        return None
+
 #==============================================================================
 # Compilation
 # To compile a template into a tree of tokens, using the given delimiters.
@@ -290,6 +296,9 @@ class Token():
 
             for name in names[1:]:
                 try:
+                    # a.num (a.1, a.2) to access list
+                    index = parse_int(name)
+                    name = parse_int(name) if isinstance(value, (list, tuple)) else name
                     value = value[name]
                 except:
                     # not found
