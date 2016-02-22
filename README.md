@@ -143,7 +143,8 @@ Hello 1
 ```
 
 Note that such function will not work on map, because map keys in python can
-be either number or string.
+be either number or string. So currently there is not way to access number
+indices, mainly because it will be invalid JSON.
 
 ```
 >>> mustache.render('Hello {{name.1}}!', {'name': {1:1, '1': 'string 1'}})
@@ -185,6 +186,19 @@ You can add your own filter:
 ```
 
 So, enjoy!
+
+## Buildin Filters
+
+Currently there are only 4 filters, later I will add more. They are:
+
+- `items`: turn a dict `{'a': 1, 'b': 2}` into `[('a', 1), ('b', 2)]` for
+    iteration. Not that do not rely it for output, inside it is not actually a
+    list.
+- `enum`: turn a list `[1,2,3]` into `[(0,1), (1,2), (1,3)]` for accessing the
+    actual index. Note that do not use it for output, cause it does not
+    actually output a list
+- `upper`: turn a string into upper case.
+- `lower`: turn a string into lower case.
 
 # About Musatche
 
