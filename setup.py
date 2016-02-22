@@ -4,10 +4,10 @@
 from setuptools import setup
 
 setup(name='pymustache',
-      version='0.2',
+      version='0.3',
       description='Mustache template engine in python',
       url='https://github.com/lotabout/pymustache',
-      download_url = 'https://github.com/lotabout/pymustache/archive/v0.2.tar.gz',
+      download_url = 'https://github.com/lotabout/pymustache/archive/v0.3.tar.gz',
       author='Mark Wallace',
       author_email='lotabout@gmail.com',
       license='MIT',
