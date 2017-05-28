@@ -68,9 +68,9 @@ Taken from https://mustache.github.io/#demo:
     <li><a href="#Green">green</a></li>
     <li><a href="#Blue">blue</a></li>
 
->>> compiled_tempalte = pymustache.compiled(template_text)
+>>> compiled_template = pymustache.compiled(template_text)
 
->>> print compiled_tempalte.render(context)
+>>> print compiled_template.render(context)
 
 <h1>Colors</h1>
 
